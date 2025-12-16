@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hava Durumu • Dashboard</title>
+
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root{
+      --bg0:#060913;
+      --bg1:#0b1226;
+      --glass: rgba(255,255,255,0.08);
+      --glass2: rgba(255,255,255,0.12);
+      --stroke: rgba(255,255,255,0.12);
+      --text: rgba(255,255,255,0.92);
+      --muted: rgba(255,255,255,0.62);
+      --muted2: rgba(255,255,255,0.45);
+      --ok: #34d399;
+      --warn:#fbbf24;
+      --bad:#fb7185;
+      --shadow: 0 18px 50px rgba(0,0,0,0.55);
+      --radius: 24px;
+    }
+
+    body{
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      min-height:100vh;
+      color: var(--text);
+      background:
+        radial-gradient(1200px 700px at 15% -10%, rgba(99,102,241,0.40), transparent 60%),
+        radial-gradient(900px 600px at 85% 10%, rgba(56,189,248,0.35), transparent 55%),
+        radial-gradient(700px 500px at 50% 120%, rgba(34,197,94,0.22), transparent 55%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+      padding: 22px;
+      overflow-x:hidden;
+    }
+
+    /* Senin animasyon bg (korundu) */
+    .weather-animation-bg{
+      position: fixed; inset:0;
+      z-index:0; opacity:0;
+      transition: opacity 1.2s ease;
+      pointer-events:none; overflow:hidden;
+    }
+    .weather-animation-bg.active{ opacity:1; }
+
+    .container{ max-width: 1050px; margin: 0 auto; position:relative; z-index:1; }
+
+    /* üst bar */
+    .topbar{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:14px; margin-bottom: 14px;
+    }
+    .brand{
+      display:flex; align-items:center; gap:10px;
+    }
+    .appmark{
+      width:44px; height:44px; border-radius: 16px;
+      background: radial-gradient(circle at 30% 25%, rgba(255,255,255,0.55), rgba(255,255,255,0.05)),
+                  linear-gradient(135deg, rgba(56,189,248,0.65), rgba(99,102,241,0.65));
+      border: 1px solid var(--stroke);
+      box-shadow: var(--shadow);
+      display:flex; align-items:center; justify-content:center;
+      font-size: 22px;
+    }
+    .brand h1{ font-size: 16px; letter-spacing: 0.2px; }
+    .brand p{ font-size: 12px; color: var(--muted); margin-top:2px; }
+
+    .rightmeta{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+    .status{
+      display:inline-flex; align-items:center; gap:8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--glass);
+      border:1px solid var(--stroke);
+      backdrop-filter: blur(14px);
+      font-size: 12px; color: var(--muted);
+    }
+    .dot{ width:8px; height:8px; border-radius: 999px; background: var(--warn); box-shadow: 0 0 0 6px rgba(0,0,0,0.25); }
+    .status.online .dot{ background: var(--ok); }
+    .status.offline .dot{ background: var(--bad); }
+    .status.loading .dot{ background: var(--warn); }
+    .last-update{ font-size: 12px; color: var(--muted2); }
+
+    /* shell */
+    .shell{
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.05));
+      border: 1px solid var(--stroke);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+      overflow:hidden;
+    }
+
+    /* HERO */
+    .hero{
+      padding: 18px 18px 14px;
+      display:grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    @media (max-width: 860px){
+      .hero{ grid-template-columns: 1fr; }
+      .rightmeta{ align-items:flex-start; }
+    }
+
+    .hero-left{
+      display:flex; flex-direction:column; gap:8px;
+      padding: 8px;
+    }
+    .hero-title{
+      display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .badge{
+      padding: 6px 10px; border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: var(--muted);
+    }
+
+    .hero-temp{
+      display:flex; align-items:flex-end; gap: 10px;
+      margin-top: 4px;
+    }
+    .temp{
+      font-size: 64px; line-height: 1; font-weight: 750;
+      letter-spacing: -1px;
+    }
+    .unit{ font-size: 18px; color: var(--muted); padding-bottom: 10px; }
+    .hero-cond{
+      display:flex; align-items:center; gap:10px;
+      color: var(--text);
+      font-size: 15px;
+    }
+    .hero-cond .emoji{ font-size: 22px; }
+    .hero-sub{
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+      max-width: 62ch;
+    }
+
+    .hero-right{
+      display:grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      padding: 8px;
+      align-content:start;
+    }
+    .mini{
+      border-radius: 18px;
+      background: rgba(0,0,0,0.18);
+      border: 1px solid rgba(255,255,255,0.10);
+      padding: 12px;
+    }
+    .mini .k{ font-size: 11px; color: var(--muted2); letter-spacing: 0.12em; text-transform:uppercase; }
+    .mini .v{ margin-top: 6px; font-size: 18px; font-weight: 650; }
+    .mini .s{ margin-top: 4px; font-size: 12px; color: var(--muted); }
+
+    /* hourly strip */
+    .hourly{
+      padding: 14px 16px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .section-title{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:10px; margin-bottom: 10px;
+    }
+    .section-title h2{
+      font-size: 13px; color: var(--muted);
+      letter-spacing: 0.14em; text-transform:uppercase;
+    }
+    .section-title .hint{ font-size: 12px; color: var(--muted2); }
+
+    .hourly-track{
+      display:flex; gap:10px;
+      overflow-x:auto;
+      overflow-y:hidden;
+      padding-bottom: 6px;
+      scroll-snap-type: x mandatory;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.2) transparent;
+      -webkit-overflow-scrolling: touch;
+    }
+    .hourly-track::-webkit-scrollbar{
+      height: 6px;
+    }
+    .hourly-track::-webkit-scrollbar-track{
+      background: transparent;
+      border-radius: 10px;
+    }
+    .hourly-track::-webkit-scrollbar-thumb{
+      background: linear-gradient(90deg, rgba(255,255,255,0.15), rgba(255,255,255,0.25));
+      border-radius: 10px;
+      transition: background 0.2s ease;
+    }
+    .hourly-track::-webkit-scrollbar-thumb:hover{
+      background: linear-gradient(90deg, rgba(255,255,255,0.25), rgba(255,255,255,0.35));
+    }
+    .hour{
+      min-width: 92px;
+      scroll-snap-align: start;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.10);
+      padding: 10px 10px 8px;
+      flex: 0 0 auto;
+    }
+    .hour .t{ font-size: 12px; color: var(--muted); }
+    .hour .e{ margin-top: 8px; font-size: 18px; }
+    .hour .c{ margin-top: 8px; font-size: 16px; font-weight: 650; }
+    .hour .m{ margin-top: 4px; font-size: 11px; color: var(--muted2); }
+
+    /* cards grid (seninkinin modern hali) */
+    .grid{
+      padding: 16px;
+      display:grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    @media (max-width: 900px){ .grid{ grid-template-columns: repeat(2, minmax(0,1fr)); } }
+    @media (max-width: 620px){ .grid{ grid-template-columns: 1fr; } }
+
+    .card{
+      border-radius: 20px;
+      background: rgba(0,0,0,0.16);
+      border: 1px solid rgba(255,255,255,0.10);
+      padding: 14px;
+      transition: transform .18s ease, border-color .18s ease;
+    }
+    .card:hover{ transform: translateY(-2px); border-color: rgba(255,255,255,0.18); }
+    .cardhead{
+      display:flex; align-items:center; justify-content:space-between;
+      margin-bottom: 10px;
+    }
+    .label{
+      font-size: 12px; color: var(--muted);
+      letter-spacing: 0.12em; text-transform:uppercase;
+    }
+    .icon{
+      width:34px; height:34px; border-radius: 14px;
+      background: rgba(255,255,255,0.08);
+      border:1px solid rgba(255,255,255,0.12);
+      display:flex; align-items:center; justify-content:center;
+      font-size: 18px;
+    }
+    .valueRow{ display:flex; align-items:baseline; gap:8px; }
+    .value{ font-size: 28px; font-weight: 720; letter-spacing: -0.2px; }
+    .u{ font-size: 12px; color: var(--muted); }
+    .sub{ margin-top: 8px; font-size: 12px; color: var(--muted2); line-height:1.45; }
+
+    /* loading + error */
+    .loading{
+      padding: 26px 16px;
+      display:flex; gap:12px; align-items:center;
+      color: var(--muted);
+    }
+    .spin{
+      width:22px; height:22px; border-radius: 999px;
+      border: 2px solid rgba(255,255,255,0.18);
+      border-top-color: rgba(255,255,255,0.9);
+      animation: s .85s linear infinite;
+    }
+    @keyframes s{ to{ transform: rotate(360deg);} }
+
+    .error{
+      margin: 14px 16px 0;
+      padding: 12px 14px;
+      border-radius: 18px;
+      background: rgba(251,113,133,0.12);
+      border: 1px solid rgba(251,113,133,0.35);
+      color: rgba(255,255,255,0.88);
+      display:none;
+    }
+    .error small{ color: rgba(255,255,255,0.65); }
+
+    /* --- Senin animasyon class'ların (kısaltmadan) --- */
+    .weather-animation-bg.weather-raining { background: linear-gradient(to bottom, #1e3a8a 0%, #0f172a 50%, #1e293b 100%); }
+    .rain-drop { position:absolute; width:2px; height:20px; background: linear-gradient(to bottom, rgba(255,255,255,0.6), rgba(255,255,255,0.2)); animation: rain-fall linear infinite; }
+    @keyframes rain-fall { 0%{ transform: translateY(-100vh) translateX(0); opacity:1;} 100%{ transform: translateY(100vh) translateX(20px); opacity:0.3;} }
+
+    .weather-animation-bg.weather-sunny{
+      background: linear-gradient(to bottom, #fbbf24 0%, #f59e0b 20%, #f97316 40%, #1e293b 70%, #0f172a 100%);
+    }
+    .sun-rays{
+      position:absolute; top: 8%; left:50%;
+      width: 350px; height:350px; transform: translate(-50%,-50%);
+      background: radial-gradient(circle, rgba(255,255,255,0.4) 0%, rgba(251,191,36,0.3) 30%, rgba(249,115,22,0.2) 50%, transparent 75%);
+      border-radius:50%; animation: sun-pulse 4s ease-in-out infinite;
+    }
+    @keyframes sun-pulse{ 0%,100%{ transform: translate(-50%,-50%) scale(1); opacity:0.7;} 50%{ transform: translate(-50%,-50%) scale(1.15); opacity:0.9;} }
+    .sun-circle{
+      position:absolute; top: 8%; left:50%;
+      width: 180px; height:180px; transform: translate(-50%,-50%);
+      background: radial-gradient(circle, #fde047 0%, #fbbf24 30%, #f59e0b 70%, #f97316 100%);
+      border-radius:50%;
+      box-shadow: 0 0 60px rgba(251,191,36,0.9), 0 0 100px rgba(249,115,22,0.6), 0 0 140px rgba(251,191,36,0.4);
+      animation: sun-rotate 20s linear infinite;
+    }
+    @keyframes sun-rotate{ from{ transform: translate(-50%,-50%) rotate(0);} to{ transform: translate(-50%,-50%) rotate(360deg);} }
+
+    .weather-animation-bg.weather-partly-cloudy{
+      background: linear-gradient(to bottom, #93c5fd 0%, #60a5fa 15%, #3b82f6 30%, #2563eb 50%, #1e293b 75%, #0f172a 100%);
+      position:relative; overflow:hidden;
+    }
+    .sunlight-beam{
+      position:absolute; top:0; left:-30%;
+      width:60%; height:100%;
+      background: linear-gradient(90deg, rgba(251,191,36,0.4) 0%, rgba(251,191,36,0.6) 30%, rgba(251,191,36,0.3) 50%, transparent 70%);
+      animation: sunlight-sweep 10s ease-in-out infinite;
+      filter: blur(40px); z-index:1;
+    }
+    @keyframes sunlight-sweep{ 0%{ transform: translateX(-100%) skewX(-20deg); opacity:0.4;} 50%{ transform: translateX(50%) skewX(-20deg); opacity:0.7;} 100%{ transform: translateX(200%) skewX(-20deg); opacity:0.4;} }
+    .cloud{ position:absolute; background: rgba(255,255,255,0.25); border-radius: 50px; animation: cloud-drift linear infinite; }
+    .cloud::before,.cloud::after{ content:''; position:absolute; background: rgba(255,255,255,0.25); border-radius: 50px; }
+    .cloud1{ width:200px; height:80px; top: 15%; left:-200px; animation-duration: 30s; }
+    .cloud1::before{ width:100px; height:100px; top:-50px; left:20px; }
+    .cloud1::after{ width:120px; height:120px; top:-60px; right:20px; }
+    .cloud2{ width:150px; height:60px; top: 25%; left:-150px; animation-duration: 40s; animation-delay: -10s; }
+    .cloud2::before{ width:80px; height:80px; top:-40px; left:15px; }
+    .cloud2::after{ width:90px; height:90px; top:-45px; right:15px; }
+    @keyframes cloud-drift{ 0%{ transform: translateX(0);} 100%{ transform: translateX(calc(100vw + 300px)); } }
+
+    .weather-animation-bg.weather-cloudy{
+      background: linear-gradient(to bottom, #94a3b8 0%, #64748b 20%, #475569 40%, #334155 60%, #1e293b 80%, #0f172a 100%);
+    }
+    .dark-cloud{ position:absolute; background: rgba(100,116,139,0.45); border-radius: 50px; animation: dark-cloud-drift linear infinite; }
+    .dark-cloud::before,.dark-cloud::after{ content:''; position:absolute; background: rgba(100,116,139,0.45); border-radius: 50px; }
+    .dark-cloud1{ width:250px; height:100px; top: 10%; left:-250px; animation-duration: 25s;}
+    .dark-cloud1::before{ width:120px; height:120px; top:-60px; left:30px;}
+    .dark-cloud1::after{ width:140px; height:140px; top:-70px; right:30px;}
+    .dark-cloud2{ width:200px; height:80px; top: 20%; left:-200px; animation-duration: 35s; animation-delay:-5s;}
+    .dark-cloud2::before{ width:100px; height:100px; top:-50px; left:25px;}
+    .dark-cloud2::after{ width:110px; height:110px; top:-55px; right:25px;}
+    .dark-cloud3{ width:180px; height:70px; top: 30%; left:-180px; animation-duration: 45s; animation-delay:-15s;}
+    .dark-cloud3::before{ width:90px; height:90px; top:-45px; left:20px;}
+    .dark-cloud3::after{ width:100px; height:100px; top:-50px; right:20px;}
+    @keyframes dark-cloud-drift{ 0%{ transform: translateX(0);} 100%{ transform: translateX(calc(100vw + 400px)); } }
+
+    .weather-animation-bg.weather-night{
+      background: linear-gradient(to bottom, #1e1b4b 0%, #312e81 20%, #1e293b 50%, #0f172a 80%, #020617 100%);
+      position:relative; overflow:hidden;
+    }
+    .star{ position:absolute; background: rgba(255,255,255,0.8); border-radius:50%; animation: twinkle 3s ease-in-out infinite; }
+    .star-small{ width:2px; height:2px; } .star-medium{ width:3px; height:3px; } .star-large{ width:4px; height:4px; }
+    @keyframes twinkle{ 0%,100%{ opacity:0.3; transform:scale(1);} 50%{ opacity:1; transform:scale(1.2);} }
+    .moon{
+      position:absolute; top: 12%; right: 15%;
+      width:120px; height:120px; border-radius:50%;
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 40%, rgba(200,200,220,0.6) 100%);
+      box-shadow: 0 0 40px rgba(255,255,255,0.4), 0 0 80px rgba(200,200,255,0.3), inset -20px -20px 0 rgba(0,0,0,0.2);
+      animation: moon-glow 4s ease-in-out infinite;
+    }
+    @keyframes moon-glow{
+      0%,100%{ box-shadow: 0 0 40px rgba(255,255,255,0.4), 0 0 80px rgba(200,200,255,0.3), inset -20px -20px 0 rgba(0,0,0,0.2); }
+      50%{ box-shadow: 0 0 60px rgba(255,255,255,0.6), 0 0 100px rgba(200,200,255,0.5), inset -20px -20px 0 rgba(0,0,0,0.2); }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="weather-animation-bg" id="weatherAnimationBg"></div>
+
+  <div class="container">
+    <div class="topbar">
+      <div class="brand">
+        <div class="appmark">☁️</div>
+        <div>
+          <h1>Hava Durumu</h1>
+          <p>ESP32 istasyonundan canlı sensör verisi</p>
+        </div>
+      </div>
+
+      <div class="rightmeta">
+        <div id="statusIndicator" class="status">
+          <span class="dot"></span>
+          <span id="statusText">Yükleniyor</span>
+        </div>
+        <div id="lastUpdate" class="last-update"></div>
+      </div>
+    </div>
+
+    <div class="shell">
+      <div id="errorBox" class="error"></div>
+
+      <div id="loading" class="loading">
+        <div class="spin"></div>
+        <div>Veriler çekiliyor…</div>
+      </div>
+
+      <!-- HERO -->
+      <div id="hero" class="hero" style="display:none;">
+        <div class="hero-left">
+          <div class="hero-title">
+            <span class="badge">ThingSpeak • Kanal #3104181</span>
+            <span class="badge" id="cityLabel">İstasyon</span>
+          </div>
+
+          <div class="hero-temp">
+            <div class="temp" id="heroTemp">--</div>
+            <div class="unit">°C</div>
+          </div>
+
+          <div class="hero-cond">
+            <span class="emoji" id="heroEmoji">❓</span>
+            <span id="heroCond">Durum yok</span>
+          </div>
+
+          <div class="hero-sub" id="heroSub" style="display:none;">
+          </div>
+        </div>
+
+        <div class="hero-right">
+          <div class="mini">
+            <div class="k">Nem</div>
+            <div class="v"><span id="miniHum">--</span>%</div>
+            <div class="s" style="display:none;"></div>
+          </div>
+          <div class="mini">
+            <div class="k">Basınç</div>
+            <div class="v"><span id="miniPres">--</span> hPa</div>
+            <div class="s" style="display:none;"></div>
+          </div>
+          <div class="mini">
+            <div class="k">Yağmur</div>
+            <div class="v" id="miniRain">--</div>
+            <div class="s" style="display:none;"></div>
+          </div>
+          <div class="mini">
+            <div class="k">Yağmur Olasılığı</div>
+            <div class="v"><span id="miniProb">--</span>%</div>
+            <div class="s" style="display:none;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- HOURLY -->
+      <div id="hourly" class="hourly" style="display:none;">
+        <div class="section-title">
+          <h2>Saatlik trend</h2>
+          <div class="hint">Son kayıtlar (yaklaşık)</div>
+        </div>
+        <div id="hourlyTrack" class="hourly-track"></div>
+      </div>
+
+      <!-- GRID -->
+      <div id="grid" class="grid" style="display:none;">
+        <div class="card">
+          <div class="cardhead">
+            <div class="label">Sıcaklık</div>
+            <div class="icon">🌡️</div>
+          </div>
+          <div class="valueRow">
+            <div class="value" id="temperature">--</div>
+            <div class="u">°C</div>
+          </div>
+          <div class="sub" style="display:none;"></div>
+        </div>
+
+        <div class="card">
+          <div class="cardhead">
+            <div class="label">Nem</div>
+            <div class="icon">💧</div>
+          </div>
+          <div class="valueRow">
+            <div class="value" id="humidity">--</div>
+            <div class="u">%</div>
+          </div>
+          <div class="sub" style="display:none;"></div>
+        </div>
+
+        <div class="card">
+          <div class="cardhead">
+            <div class="label">Basınç</div>
+            <div class="icon">🧭</div>
+          </div>
+          <div class="valueRow">
+            <div class="value" id="pressure">--</div>
+            <div class="u">hPa</div>
+          </div>
+          <div class="sub" style="display:none;"></div>
+        </div>
+
+        <div class="card">
+          <div class="cardhead">
+            <div class="label">Yağmur Olasılığı</div>
+            <div class="icon">📈</div>
+          </div>
+          <div class="valueRow">
+            <div class="value" id="rainProbability">--</div>
+            <div class="u">%</div>
+          </div>
+          <div class="sub" style="display:none;"></div>
+        </div>
+
+        <div class="card">
+          <div class="cardhead">
+            <div class="label">Yağmur Durumu</div>
+            <div class="icon" id="rainIcon">🌧️</div>
+          </div>
+          <div class="valueRow">
+            <div class="value" id="rainStatus">--</div>
+          </div>
+          <div class="sub" style="display:none;"></div>
+        </div>
+
+        <div class="card">
+          <div class="cardhead">
+            <div class="label">Gökyüzü</div>
+            <div class="icon" id="skyIcon">☀️</div>
+          </div>
+          <div class="valueRow">
+            <div class="value" id="skyStatus">--</div>
+          </div>
+          <div class="sub" style="display:none;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const THINGSPEAK_CHANNEL_ID = '3104181';
+  const THINGSPEAK_READ_API_KEY = '9MTDZYWBMI8DD2Y9';
+  const THINGSPEAK_SERVER = 'api.thingspeak.com';
+
+  const els = {
+    statusIndicator: document.getElementById('statusIndicator'),
+    statusText: document.getElementById('statusText'),
+    lastUpdate: document.getElementById('lastUpdate'),
+    loading: document.getElementById('loading'),
+    errorBox: document.getElementById('errorBox'),
+
+    hero: document.getElementById('hero'),
+    heroTemp: document.getElementById('heroTemp'),
+    heroEmoji: document.getElementById('heroEmoji'),
+    heroCond: document.getElementById('heroCond'),
+    heroSub: document.getElementById('heroSub'),
+
+    miniHum: document.getElementById('miniHum'),
+    miniPres: document.getElementById('miniPres'),
+    miniRain: document.getElementById('miniRain'),
+    miniProb: document.getElementById('miniProb'),
+
+    hourly: document.getElementById('hourly'),
+    hourlyTrack: document.getElementById('hourlyTrack'),
+
+    grid: document.getElementById('grid'),
+    temperature: document.getElementById('temperature'),
+    humidity: document.getElementById('humidity'),
+    pressure: document.getElementById('pressure'),
+    rainProbability: document.getElementById('rainProbability'),
+    rainIcon: document.getElementById('rainIcon'),
+    rainStatus: document.getElementById('rainStatus'),
+    skyIcon: document.getElementById('skyIcon'),
+    skyStatus: document.getElementById('skyStatus'),
+
+    weatherAnimationBg: document.getElementById('weatherAnimationBg')
+  };
+
+  function safeFloat(v, def=null){
+    if (v === null || v === undefined || v === '' || v === 'null') return def;
+    const p = parseFloat(v); return Number.isFinite(p) ? p : def;
+  }
+  function safeInt(v, def=null){
+    if (v === null || v === undefined || v === '' || v === 'null') return def;
+    const p = parseInt(v, 10); return Number.isFinite(p) ? p : def;
+  }
+
+  function setStatus(mode, text){
+    els.statusIndicator.classList.remove('online','offline','loading');
+    if (mode === 'online') els.statusIndicator.classList.add('online');
+    else if (mode === 'offline') els.statusIndicator.classList.add('offline');
+    else if (mode === 'loading') els.statusIndicator.classList.add('loading');
+    els.statusText.textContent = text;
+  }
+
+  function formatTR(dt){
+    return dt.toLocaleString('tr-TR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  }
+
+  function skyToUi(skyCondition){
+    // 1 güneşli, 2 parçalı, 3 bulutlu, 4 gece
+    if (skyCondition === 1) return { emoji:'☀️', text:'Güneşli' };
+    if (skyCondition === 2) return { emoji:'⛅', text:'Parçalı Bulutlu' };
+    if (skyCondition === 3) return { emoji:'☁️', text:'Bulutlu' };
+    if (skyCondition === 4) return { emoji:'🌙', text:'Gece' };
+    return { emoji:'❓', text:'Bilinmiyor' };
+  }
+
+  function rainToUi(rainStatus){
+    // field5: 0 = yağmur var (yağıyor), 1 = yağmur yok
+    if (rainStatus === 0 || rainStatus === '0') return { emoji:'🌧️', text:'Yağmur Yağıyor' };
+    if (rainStatus === 1 || rainStatus === '1') return { emoji:'☀️', text:'Yağmur Yok' };
+    return { emoji:'❓', text:'Veri Yok' };
+  }
+
+  function applyBackgroundAnimation({rainStatus, skyCondition}){
+    const bg = els.weatherAnimationBg;
+    bg.classList.remove('active','weather-raining','weather-sunny','weather-partly-cloudy','weather-cloudy','weather-night');
+    bg.innerHTML = '';
+
+    let weatherClass = '';
+    // Field5: 0 = yağmur var, 1 = yağmur yok
+    if (rainStatus === 0 || rainStatus === '0'){
+      weatherClass = 'weather-raining';
+      for (let i=0;i<50;i++){
+        const drop=document.createElement('div');
+        drop.className='rain-drop';
+        drop.style.left = (Math.random()*100)+'%';
+        drop.style.animationDelay = (Math.random()*2)+'s';
+        drop.style.animationDuration = (Math.random()*0.5+0.5)+'s';
+        bg.appendChild(drop);
+      }
+    } else if (skyCondition === 1){
+      weatherClass='weather-sunny';
+      const rays=document.createElement('div'); rays.className='sun-rays'; bg.appendChild(rays);
+      const sun=document.createElement('div'); sun.className='sun-circle'; bg.appendChild(sun);
+    } else if (skyCondition === 2){
+      weatherClass='weather-partly-cloudy';
+      const beam=document.createElement('div'); beam.className='sunlight-beam'; bg.appendChild(beam);
+      const c1=document.createElement('div'); c1.className='cloud cloud1'; bg.appendChild(c1);
+      const c2=document.createElement('div'); c2.className='cloud cloud2'; bg.appendChild(c2);
+    } else if (skyCondition === 3){
+      weatherClass='weather-cloudy';
+      const d1=document.createElement('div'); d1.className='dark-cloud dark-cloud1'; bg.appendChild(d1);
+      const d2=document.createElement('div'); d2.className='dark-cloud dark-cloud2'; bg.appendChild(d2);
+      const d3=document.createElement('div'); d3.className='dark-cloud dark-cloud3'; bg.appendChild(d3);
+    } else if (skyCondition === 4){
+      weatherClass='weather-night';
+      const moon=document.createElement('div'); moon.className='moon'; bg.appendChild(moon);
+      const starCount=80;
+      for(let i=0;i<starCount;i++){
+        const st=document.createElement('div');
+        const r=Math.random();
+        st.className = 'star ' + (r<0.4 ? 'star-small' : r<0.7 ? 'star-medium' : 'star-large');
+        st.style.left=(Math.random()*100)+'%';
+        st.style.top=(Math.random()*70)+'%';
+        st.style.animationDelay=(Math.random()*3)+'s';
+        st.style.animationDuration=(Math.random()*2+2)+'s';
+        bg.appendChild(st);
+      }
+    }
+
+    if (weatherClass){
+      bg.classList.add('active', weatherClass);
+    }
+  }
+
+  function buildHourly(feeds){
+    // ThingSpeak'ten gelen verileri işle: son 24 geçerli kayıt -> yatay şerit
+    els.hourlyTrack.innerHTML = '';
+    
+    // Geçerli kayıtları filtrele ve tarih parse et
+    const valid = feeds
+      .filter(f => {
+        // Field1 (sıcaklık) olmalı ve created_at geçerli olmalı
+        if (!f.field1) return false;
+        if (!f.created_at) return false;
+        const dt = new Date(f.created_at);
+        return !isNaN(dt.getTime()); // Geçerli tarih kontrolü
+      })
+      .map(f => {
+        const dt = new Date(f.created_at);
+        return {
+          ...f,
+          parsedDate: dt,
+          timestamp: dt.getTime()
+        };
+      })
+      .sort((a, b) => a.timestamp - b.timestamp) // Kronolojik sıralama (eski -> yeni)
+      .slice(-24); // Son 24 kayıt
+
+    if (valid.length === 0) {
+      els.hourlyTrack.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Saatlik veri bulunamadı</div>';
+      return;
+    }
+
+    for (const f of valid){
+      const t = safeFloat(f.field1, null);
+      const h = safeFloat(f.field2, null);
+      const dt = f.parsedDate;
+
+      // Tarih formatını güvenli şekilde göster
+      let timeStr = '--:--';
+      try {
+        timeStr = dt.toLocaleTimeString('tr-TR', {
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: 'Europe/Istanbul' // Türkiye saati
+        });
+      } catch (e) {
+        console.warn('Tarih formatı hatası:', f.created_at, e);
+      }
+
+      const item = document.createElement('div');
+      item.className='hour';
+      item.innerHTML = `
+        <div class="t">${timeStr}</div>
+        <div class="e">${t === null ? '❓' : (t >= 28 ? '☀️' : t >= 18 ? '⛅' : '☁️')}</div>
+        <div class="c">${t === null ? '--' : t.toFixed(0)}°</div>
+        <div class="m">${h === null ? '--' : h.toFixed(0)}% nem</div>
+      `;
+      els.hourlyTrack.appendChild(item);
+    }
+  }
+
+  async function fetchWeatherData(){
+    setStatus('loading','Yükleniyor');
+    els.loading.style.display='flex';
+    els.errorBox.style.display='none';
+    els.hero.style.display='none';
+    els.hourly.style.display='none';
+    els.grid.style.display='none';
+
+    try{
+      const url = `https://${THINGSPEAK_SERVER}/channels/${THINGSPEAK_CHANNEL_ID}/feeds.json?api_key=${THINGSPEAK_READ_API_KEY}&results=50`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      const feeds = json.feeds || [];
+      if (!feeds.length) throw new Error('Veri yok');
+
+      // field1-2-3 dolu en güncel kayıt
+      let data=null;
+      for (let i=feeds.length-1;i>=0;i--){
+        const f=feeds[i];
+        if (f.field1 && f.field2 && f.field3){ data=f; break; }
+      }
+      if (!data) throw new Error('Geçerli kayıt bulunamadı (field1/2/3 boş).');
+
+      // field6 / field7 en son dolu olanı çek (senin mantık)
+      let field6=null, field7=null;
+      for (let i=feeds.length-1;i>=0;i--){
+        if (field6===null && feeds[i].field6 && feeds[i].field6 !== 'null') field6=feeds[i].field6;
+        if (field7===null && feeds[i].field7 && feeds[i].field7 !== 'null') field7=feeds[i].field7;
+        if (field6!==null && field7!==null) break;
+      }
+
+      const temperature = safeFloat(data.field1, null);
+      const humidity = safeFloat(data.field2, null);
+      const pressure = safeFloat(data.field3, null);
+      // Field5: 0 = yağmur var (yağıyor), 1 = yağmur yok
+      const rainStatus = safeInt(data.field5, null);
+      const rainProbability = safeFloat(field6 ?? data.field6, 0);
+      const skyCondition = safeInt(field7 ?? data.field7, null);
+
+      // UI map
+      const skyUi = skyToUi(skyCondition);
+      const rainUi = rainToUi(rainStatus);
+
+      // Hero
+      els.heroTemp.textContent = temperature !== null ? temperature.toFixed(0) : '--';
+      // öncelik: yağmur yağıyorsa durum yağmur (field5: 0 = yağmur var)
+      if (rainStatus === 0 || rainStatus === '0'){
+        els.heroEmoji.textContent = rainUi.emoji;
+        els.heroCond.textContent = rainUi.text;
+      } else {
+        els.heroEmoji.textContent = skyUi.emoji;
+        els.heroCond.textContent = skyUi.text;
+      }
+      els.miniHum.textContent = humidity !== null ? humidity.toFixed(0) : '--';
+      els.miniPres.textContent = pressure !== null ? pressure.toFixed(0) : '--';
+      els.miniRain.textContent = rainUi.text;
+      els.miniProb.textContent = (rainProbability ?? 0).toFixed(0);
+
+      // Cards
+      els.temperature.textContent = temperature !== null ? temperature.toFixed(1) : '--';
+      els.humidity.textContent = humidity !== null ? humidity.toFixed(1) : '--';
+      els.pressure.textContent = pressure !== null ? pressure.toFixed(2) : '--';
+      els.rainProbability.textContent = (rainProbability ?? 0).toFixed(1);
+      els.rainIcon.textContent = rainUi.emoji;
+      els.rainStatus.textContent = rainUi.text;
+      els.skyIcon.textContent = skyUi.emoji;
+      els.skyStatus.textContent = skyUi.text;
+
+      // Background animation
+      applyBackgroundAnimation({rainStatus, skyCondition});
+
+      // hourly
+      buildHourly(feeds);
+
+      // time
+      const updateTime = new Date(data.created_at || Date.now());
+      els.lastUpdate.textContent = `Son güncelleme: ${formatTR(updateTime)}`;
+
+      // show
+      setStatus('online','Çevrimiçi');
+      els.loading.style.display='none';
+      els.hero.style.display='grid';
+      els.hourly.style.display='block';
+      els.grid.style.display='grid';
+
+    } catch(err){
+      console.error(err);
+      setStatus('offline','Veri yok');
+      els.loading.style.display='none';
+
+      els.errorBox.style.display='block';
+      els.errorBox.innerHTML = `<strong>Veri alınamadı.</strong> ${err.message}<br><small>ESP32 gönderiyor mu, API key doğru mu, ThingSpeak rate limit var mı kontrol et.</small>`;
+
+      els.hero.style.display='grid';
+      els.hourly.style.display='none';
+      els.grid.style.display='grid';
+      els.lastUpdate.textContent = '—';
+    }
+  }
+
+  window.addEventListener('DOMContentLoaded', fetchWeatherData);
+  setInterval(fetchWeatherData, 30000);
+</script>
+</body>
+</html>

@@ -651,7 +651,8 @@
   }
 
   function buildHourly(feeds){
-    // ThingSpeak'ten gelen verileri işle: son 24 geçerli kayıt -> yatay şerit
+    // Son 24 saati göster: en eski saatten en yeni saate doğru (geçmişten bugüne)
+    // Örnek: Şu an 2:49 ise, saat 2'deki veri gösterilir, sonra saat 1, saat 0... böyle 24 saat geriye
     els.hourlyTrack.innerHTML = '';
     
     // Geçerli kayıtları filtrele ve tarih parse et
@@ -665,44 +666,76 @@
       })
       .map(f => {
         const dt = new Date(f.created_at);
+        // Türkiye saatine çevir
+        const trDate = new Date(dt.toLocaleString('en-US', { timeZone: 'Europe/Istanbul' }));
         return {
           ...f,
-          parsedDate: dt,
-          timestamp: dt.getTime()
+          parsedDate: trDate,
+          timestamp: trDate.getTime(),
+          hour: trDate.getHours(), // Saat bilgisi (0-23)
+          dateKey: `${trDate.getFullYear()}-${String(trDate.getMonth()+1).padStart(2,'0')}-${String(trDate.getDate()).padStart(2,'0')}-${String(trDate.getHours()).padStart(2,'0')}` // Yıl-Ay-Gün-Saat
         };
       })
-      .sort((a, b) => a.timestamp - b.timestamp) // Kronolojik sıralama (eski -> yeni)
-      .slice(-24); // Son 24 kayıt
+      .sort((a, b) => a.timestamp - b.timestamp); // Kronolojik sıralama
 
-    if (valid.length === 0) {
-      els.hourlyTrack.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">Saatlik veri bulunamadı</div>';
-      return;
+    // Şu anki saati al (Türkiye saati)
+    const now = new Date();
+    const nowTR = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Istanbul' }));
+    const currentHour = nowTR.getHours();
+    const currentDate = nowTR.getDate();
+    const currentMonth = nowTR.getMonth();
+    const currentYear = nowTR.getFullYear();
+
+    // Her saat için o saatteki verileri bul (o saatteki ilk veri)
+    const hourlyData = new Map(); // Her saat için tek bir veri sakla
+    
+    for (const f of valid) {
+      const dateKey = f.dateKey;
+      // Eğer bu saat için henüz veri yoksa, ilk veriyi kaydet
+      if (!hourlyData.has(dateKey)) {
+        hourlyData.set(dateKey, {
+          temp: safeFloat(f.field1, null),
+          hum: safeFloat(f.field2, null),
+          timestamp: f.timestamp
+        });
+      }
     }
 
-    for (const f of valid){
-      const t = safeFloat(f.field1, null);
-      const h = safeFloat(f.field2, null);
-      const dt = f.parsedDate;
-
-      // Tarih formatını güvenli şekilde göster
-      let timeStr = '--:--';
-      try {
-        timeStr = dt.toLocaleTimeString('tr-TR', {
-          hour: '2-digit',
-          minute: '2-digit',
-          timeZone: 'Europe/Istanbul' // Türkiye saati
-        });
-      } catch (e) {
-        console.warn('Tarih formatı hatası:', f.created_at, e);
+    // Son 24 saat için kartlar oluştur (en yeni saatten en eski saate doğru - bugünden geçmişe)
+    // i=0: en yeni saat (şu anki saat), i=23: en eski saat (23 saat önce)
+    for (let i = 0; i < 24; i++) {
+      // Hangi saati gösterelim? (şu anki saat - i, yani en yeni saatten başla)
+      let targetHour = currentHour - i;
+      let targetDate = new Date(currentYear, currentMonth, currentDate);
+      
+      // Eğer saat negatif olduysa, önceki güne geç
+      if (targetHour < 0) {
+        targetHour += 24;
+        targetDate.setDate(targetDate.getDate() - 1);
       }
+      
+      // Bu saat için veri var mı?
+      const dateKey = `${targetDate.getFullYear()}-${String(targetDate.getMonth()+1).padStart(2,'0')}-${String(targetDate.getDate()).padStart(2,'0')}-${String(targetHour).padStart(2,'0')}`;
+      const hourData = hourlyData.get(dateKey);
+      
+      let temp = null;
+      let hum = null;
+      
+      if (hourData) {
+        temp = hourData.temp;
+        hum = hourData.hum;
+      }
+
+      // Saat formatı (HH:00)
+      const timeStr = `${String(targetHour).padStart(2, '0')}:00`;
 
       const item = document.createElement('div');
       item.className='hour';
       item.innerHTML = `
         <div class="t">${timeStr}</div>
-        <div class="e">${t === null ? '❓' : (t >= 28 ? '☀️' : t >= 18 ? '⛅' : '☁️')}</div>
-        <div class="c">${t === null ? '--' : t.toFixed(0)}°</div>
-        <div class="m">${h === null ? '--' : h.toFixed(0)}% nem</div>
+        <div class="e">${temp === null ? '❓' : (temp >= 28 ? '☀️' : temp >= 18 ? '⛅' : '☁️')}</div>
+        <div class="c">${temp === null ? '--' : temp.toFixed(0)}°</div>
+        <div class="m">${hum === null ? '--' : hum.toFixed(0)}% nem</div>
       `;
       els.hourlyTrack.appendChild(item);
     }
